@@ -3,13 +3,12 @@ pipeline {
 
     tools {
         nodejs 'node22'
+        jdk 'openjdk'
     }
 
     environment {
-
-        docker_image = "dockshresthahub/mapview:v1"
-        cluster = "mapview"
-        service = "mapview-svc"
+        scannerHome = tool 'sonar'
+        docker_image = "dockshresthahub/camp-site:latest"
     }
 
     stages {
@@ -19,13 +18,24 @@ pipeline {
                 git branch: 'main', credentialsId: 'git-cred', url: 'https://github.com/rajitShrestha/camp-view'
             }
         }
-    
-    
+
+        stage('Sonar Analysis') {
+
+            steps {
+               withSonarQubeEnv('sonar') {
+                   sh '''${scannerHome}/bin/sonar-scanner -Dsonar.projectKey=camp-site \
+                   -Dsonar.projectName=camp-site \
+                   -Dsonar.projectVersion=1.0
+                   '''
+              }
+            }
+        }
+
         stage ('build a docker image') {
             steps {
                 script {
 
-                    withDockerRegistry(credentialsId: 'docker-hub') {
+                    withDockerRegistry(credentialsId: 'docker-cred') {
 
                         sh 'docker build -t ${docker_image} .'
 
@@ -38,22 +48,14 @@ pipeline {
             steps {
                 script {
 
-                    withDockerRegistry(credentialsId: 'docker-hub') {
+                    withDockerRegistry(credentialsId: 'docker-cred') {
 
                         sh 'docker push ${docker_image}'
 
                     }
                 }
             }
-        }     
-
-        stage('Deploy to ecs') {
-            steps {
-                withAWS(credentials: 'aws-cred', region: 'us-east-1') {
-                    sh 'aws ecs update-service --cluster ${cluster} --service ${service} --force-new-deployment'
-                }
-            }
-        }
+        }   
           
         
     }
@@ -66,4 +68,5 @@ pipeline {
             }
         }
     }
+    
 }
